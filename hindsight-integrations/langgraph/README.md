@@ -3,8 +3,9 @@
 LangGraph and LangChain integration for [Hindsight](https://github.com/vectorize-io/hindsight) — persistent long-term memory for AI agents.
 
 Provides three integration patterns:
+
 - **Tools** — retain/recall/reflect as LangChain `@tool` functions for agent-driven memory. Works with **both LangChain and LangGraph**.
-- **Nodes** *(LangGraph)* — pre-built graph nodes for automatic memory injection and storage
+- **Nodes** _(LangGraph)_ — pre-built graph nodes for automatic memory injection and storage
 - **Memory Instructions** — pre-fetch memories into a system prompt string. Works with **any LangChain model**, no graph needed.
 
 ## Prerequisites
@@ -152,22 +153,28 @@ tools = create_hindsight_tools(bank_id="user-123", hindsight_api_url="http://loc
 
 All factory functions accept `client`, `hindsight_api_url`, and `api_key` to override the global config.
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `hindsight_api_url` | Hindsight API URL | `https://api.hindsight.vectorize.io` |
-| `api_key` | API key (or `HINDSIGHT_API_KEY` env var) | `None` |
-| `budget` | Recall budget: `low`, `mid`, `high` | `mid` |
-| `max_tokens` | Max tokens for recall results | `4096` |
-| `tags` | Tags applied to retain operations | `None` |
-| `recall_tags` | Tags to filter recall results | `None` |
-| `recall_tags_match` | Tag matching: `any`, `all`, `any_strict`, `all_strict` | `any` |
+Memory nodes also inherit operation defaults when they are created:
+`create_recall_node()` uses the global `budget`, `max_tokens`, `recall_tags`,
+and `recall_tags_match`; `create_retain_node()` uses the global `tags`.
+Explicit factory arguments take precedence, including `tags=[]` to disable
+inherited tags. Later `configure()` calls apply to newly created nodes.
+
+| Parameter           | Description                                            | Default                              |
+| ------------------- | ------------------------------------------------------ | ------------------------------------ |
+| `hindsight_api_url` | Hindsight API URL                                      | `https://api.hindsight.vectorize.io` |
+| `api_key`           | API key (or `HINDSIGHT_API_KEY` env var)               | `None`                               |
+| `budget`            | Recall budget: `low`, `mid`, `high`                    | `mid`                                |
+| `max_tokens`        | Max tokens for recall results                          | `4096`                               |
+| `tags`              | Tags applied to retain operations                      | `None`                               |
+| `recall_tags`       | Tags to filter recall results                          | `None`                               |
+| `recall_tags_match` | Tag matching: `any`, `all`, `any_strict`, `all_strict` | `any`                                |
 
 ## Requirements
 
 - Python 3.10+
 - `langchain-core >= 0.3.0`
 - `hindsight-client >= 0.4.0`
-- `langgraph >= 0.3.0` *(only for nodes pattern — install with `pip install hindsight-langgraph[langgraph]`)*
+- `langgraph >= 0.3.0` _(only for nodes pattern — install with `pip install hindsight-langgraph[langgraph]`)_
 
 ## Documentation
 

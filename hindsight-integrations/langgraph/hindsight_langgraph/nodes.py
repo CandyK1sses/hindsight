@@ -13,6 +13,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import MessagesState
 
 from ._client import resolve_client
+from .config import get_config
 from .errors import HindsightError
 
 logger = logging.getLogger(__name__)
@@ -45,11 +46,11 @@ def create_recall_node(
     client: Optional[Hindsight] = None,
     hindsight_api_url: Optional[str] = None,
     api_key: Optional[str] = None,
-    budget: str = "mid",
-    max_tokens: int = 4096,
+    budget: Optional[str] = None,
+    max_tokens: Optional[int] = None,
     max_results: int = 10,
     tags: Optional[list[str]] = None,
-    tags_match: str = "any",
+    tags_match: Optional[str] = None,
     recall_types: Optional[list[str]] = None,
     recall_include_entities: bool = False,
     bank_id_from_config: str = "user_id",
@@ -91,11 +92,12 @@ def create_recall_node(
         client: Pre-configured Hindsight client.
         hindsight_api_url: API URL (used if no client provided).
         api_key: API key (used if no client provided).
-        budget: Recall budget level (low/mid/high).
-        max_tokens: Maximum tokens for recall results.
+        budget: Recall budget level (low/mid/high). Defaults to global config, then mid.
+        max_tokens: Maximum tokens for recall results. Defaults to global config, then 4096.
         max_results: Maximum number of memories to inject.
-        tags: Tags to filter recall results.
-        tags_match: Tag matching mode.
+        tags: Tags to filter recall results. Defaults to global recall_tags;
+            pass [] to disable the inherited filter.
+        tags_match: Tag matching mode. Defaults to global recall_tags_match, then any.
         recall_types: Fact types to filter (world, experience, observation).
         recall_include_entities: Include entity information in recall results.
         bank_id_from_config: Config key to read bank_id from at runtime.
@@ -110,6 +112,18 @@ def create_recall_node(
         An async node function compatible with LangGraph StateGraph.
     """
     resolved_client = resolve_client(client, hindsight_api_url, api_key)
+
+    # Resolve operation defaults at construction, like the tool factories. None
+    # means omitted; explicit built-in defaults and [] must override configure().
+    global_config = get_config()
+    effective_budget = budget if budget is not None else (global_config.budget if global_config else "mid")
+    effective_max_tokens = (
+        max_tokens if max_tokens is not None else (global_config.max_tokens if global_config else 4096)
+    )
+    effective_tags = tags if tags is not None else (global_config.recall_tags if global_config else None)
+    effective_tags_match = (
+        tags_match if tags_match is not None else (global_config.recall_tags_match if global_config else "any")
+    )
 
     async def recall_node(state: MessagesState, config: Optional[RunnableConfig] = None) -> dict[str, Any]:
         # add_messages appends updates: an empty list leaves the previous recall
@@ -145,12 +159,12 @@ def create_recall_node(
             recall_kwargs: dict[str, Any] = {
                 "bank_id": resolved_bank_id,
                 "query": query,
-                "budget": budget,
-                "max_tokens": max_tokens,
+                "budget": effective_budget,
+                "max_tokens": effective_max_tokens,
             }
-            if tags:
-                recall_kwargs["tags"] = tags
-                recall_kwargs["tags_match"] = tags_match
+            if effective_tags:
+                recall_kwargs["tags"] = effective_tags
+                recall_kwargs["tags_match"] = effective_tags_match
             if recall_types:
                 recall_kwargs["types"] = recall_types
             if recall_include_entities:
@@ -207,7 +221,8 @@ def create_retain_node(
         client: Pre-configured Hindsight client.
         hindsight_api_url: API URL (used if no client provided).
         api_key: API key (used if no client provided).
-        tags: Tags to apply to stored memories.
+        tags: Tags to apply to stored memories. Defaults to global tags;
+            pass [] to disable inherited tags.
         metadata: Metadata dict to attach to retained memories.
         document_id: Document ID for grouping/upserting memories.
         bank_id_from_config: Config key to read bank_id from at runtime.
@@ -218,6 +233,8 @@ def create_retain_node(
         An async node function compatible with LangGraph StateGraph.
     """
     resolved_client = resolve_client(client, hindsight_api_url, api_key)
+    global_config = get_config()
+    effective_tags = tags if tags is not None else (global_config.tags if global_config else None)
 
     async def retain_node(state: MessagesState, config: Optional[RunnableConfig] = None) -> dict[str, Any]:
         resolved_bank_id = bank_id
@@ -257,8 +274,8 @@ def create_retain_node(
                 "bank_id": resolved_bank_id,
                 "content": content,
             }
-            if tags:
-                retain_kwargs["tags"] = tags
+            if effective_tags:
+                retain_kwargs["tags"] = effective_tags
             if metadata:
                 retain_kwargs["metadata"] = metadata
             if document_id:
